@@ -408,20 +408,40 @@ const camera = new Camera([0.0, 0.0, 5.0]);
     const program = createProgram(gl, vertexShaderSource, fragmentShaderSource);
 
     // Load the cat model
-    const catResponse = await fetch("../models/cat.obj");
-    const catObjData = await catResponse.text();
-    const cat = new Object3D(gl, program, catObjData, "../images/texture.png", 1.5);
-
-
     const kowalskiResponse = await fetch("../models/Kowalski.obj");
     const kowalskiObjData = await kowalskiResponse.text();
     const kowalski = new Object3D(gl, program, kowalskiObjData, "../images/Kowalski.png", 0.2);
 
+    const privateResponse = await fetch("../models/Private.obj");
+    const privateObjData = await privateResponse.text();
+    const private_ = new Object3D(gl, program, privateObjData, "../images/Private.png", 0.2);
 
-    // Load the mouse model
-    const ratResponse = await fetch("../models/rat.obj");
-    const ratObjData = await ratResponse.text();
-    const rat = new Object3D(gl, program, ratObjData, "../images/rat_texture.png", 0.2);
+    const ricoResponse = await fetch("../models/Rico.obj");
+    const ricoObjData = await ricoResponse.text();
+    const rico = new Object3D(gl, program, ricoObjData, "../images/Rico.png", 0.2);
+
+    const skipperResponse = await fetch("../models/Skipper.obj");
+    const skipperObjData = await skipperResponse.text();
+    const skipper = new Object3D(gl, program, skipperObjData, "../images/Skipper.png", 0.2);
+
+    const mauriceResponse = await fetch("../models/Maurice.obj");
+    const mauriceObjData = await mauriceResponse.text();
+    const maurice = new Object3D(gl, program, mauriceObjData, "../images/Maurice.png", 0.2);
+
+    const julienResponse = await fetch("../models/Julien.obj");
+    const julienObjData = await julienResponse.text();
+    const julien = new Object3D(gl, program, julienObjData, "../images/JulienMaster.png", 0.2);
+
+    const mortResponse = await fetch("../models/Mort.obj");
+    const mortObjData = await mortResponse.text();
+    const mort = new Object3D(gl, program, mortObjData, "../images/Mort.png", 0.2);
+
+
+    var modelMatrices = [];
+    for (let index = 0; index < 7; index++) {
+        modelMatrices.push(mat4.create());
+        mat4.translate(modelMatrices[index], modelMatrix, [index*2, 0, 0]);
+    }
 
     function render() {
         resizeCanvasToDisplaySize(canvas);
@@ -437,21 +457,24 @@ const camera = new Camera([0.0, 0.0, 5.0]);
         update(deltaTime); // Update camera position
 
         const viewMatrix = camera.getViewMatrix(); // Get updated view matrix
-        const vpMatrix = mat4.create(); // Combined View-Projection matrix
-        mat4.multiply(vpMatrix, projectionMatrix, viewMatrix);
 
-        // cat.render(modelMatrix, viewMatrix, projectionMatrix, 0);
+        for (let index = 0; index < modelMatrices.length; index++) {
+            mat4.rotateY(modelMatrices[index], modelMatrices[index], 0.01)
+        }
 
-        // mat4.translate(modelMatrix, modelMatrix, [0, 0, 10]);
-        mat4.rotateY(modelMatrix, modelMatrix, 0.01);
-        kowalski.render(modelMatrix, viewMatrix, projectionMatrix, 1);
+        private_.render(modelMatrices[0], viewMatrix, projectionMatrix, 0);
 
+        skipper.render(modelMatrices[1], viewMatrix, projectionMatrix, 1);
 
+        kowalski.render(modelMatrices[2], viewMatrix, projectionMatrix, 2);
 
-        // rat.render(model, view, projection, 1);
+        rico.render(modelMatrices[3], viewMatrix, projectionMatrix, 0);
 
-        // mat4.translate(model, model, [0, 0, 1])
+        mort.render(modelMatrices[4], viewMatrix, projectionMatrix, 1)
 
+        julien.render(modelMatrices[5], viewMatrix, projectionMatrix, 1)
+
+        maurice.render(modelMatrices[6], viewMatrix, projectionMatrix, 2)
 
         requestAnimationFrame(render);
     }
