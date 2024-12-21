@@ -210,21 +210,21 @@ export class Object3D {
 
         // Set values for Point Light
         gl.uniform3fv(pointLightLoc.position, [1.0, 2.0, 3.0]);  // Position
-        gl.uniform3fv(pointLightLoc.color, [1.0, 0.8, 0.6]);     // Color
+        gl.uniform3fv(pointLightLoc.color, [0.0, 1.0, 1.0]);     // Color
         gl.uniform1f(pointLightLoc.intensity, 1.5);              // Intensity
         gl.uniform3fv(pointLightLoc.attenuation, [1.0, 0.09, 0.032]); // Attenuation
 
         // Set values for Directional Light
         gl.uniform3fv(dirLightLoc.direction, [-0.5, -1.0, -0.5]); // Direction
-        gl.uniform3fv(dirLightLoc.color, [1.0, 1.0, 1.0]);        // Color
+        gl.uniform3fv(dirLightLoc.color, [0.7, 0.0, 0.0]);        // Color
         gl.uniform1f(dirLightLoc.intensity, 0.8);                 // Intensity
 
         // Set values for Spotlight
         gl.uniform3fv(spotLightLoc.position, [2.0, 4.0, 2.0]);    // Position
         gl.uniform3fv(spotLightLoc.direction, [-1.0, -1.0, -1.0]);// Direction
-        gl.uniform3fv(spotLightLoc.color, [1.0, 0.5, 0.2]);       // Color
+        gl.uniform3fv(spotLightLoc.color, [1.0, 0.0, 1.0]);       // Color
         gl.uniform1f(spotLightLoc.intensity, 2.0);                // Intensity
-        gl.uniform1f(spotLightLoc.cutoff, Math.cos(Math.PI / 6)); // Spotlight cutoff (30 degrees)
+        gl.uniform1f(spotLightLoc.cutoff, Math.cos(Math.PI / 12)); // Spotlight cutoff (30 degrees)
 
         gl.uniform1i(gl.getUniformLocation(this.program, "uShadingMode"), shadingMode);
 
@@ -468,13 +468,18 @@ const camera = new Camera([0.0, 0.0, 5.0]);
 
         kowalski.render(modelMatrices[2], viewMatrix, projectionMatrix, 2);
 
-        rico.render(modelMatrices[3], viewMatrix, projectionMatrix, 0);
 
         mort.render(modelMatrices[4], viewMatrix, projectionMatrix, 1)
 
         julien.render(modelMatrices[5], viewMatrix, projectionMatrix, 1)
 
         maurice.render(modelMatrices[6], viewMatrix, projectionMatrix, 2)
+
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        //gl.depthMask(false);
+        rico.render(modelMatrices[3], viewMatrix, projectionMatrix, 0);
+        //gl.depthMask(true);
 
         requestAnimationFrame(render);
     }
