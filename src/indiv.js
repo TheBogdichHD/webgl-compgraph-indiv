@@ -201,23 +201,62 @@ export class Object3D {
     }
 }
 
+class Package {
+    constructor(position, velocity, gl, program, objData, textureUrl) {
+        this.object = new Object3D(gl, program, objData, textureUrl, 0.05);
+        this.position = vec3.clone(position);
+        this.velocity = vec3.clone(velocity);
+    }
+
+    update(deltaTime) {
+        this.position[1] -= this.velocity[1] * deltaTime;
+    }
+
+    isOutOfBounds() {
+        return this.position[1] < -10;
+    }
+
+    render(viewMatrix, projectionMatrix) {
+        const modelMatrix = mat4.create();
+        mat4.translate(modelMatrix, modelMatrix, this.position);
+        this.object.render(modelMatrix, viewMatrix, projectionMatrix);
+    }
+}
 
 const camera = new Camera([0, 2, 10]);
 let lastFrame = 0;
 
 const keys = {};
 class Zeppelin {
-    constructor(gl, program, objData, textureUrl) {
-        this.object = new Object3D(gl, program, objData, textureUrl, 0.02);
+    constructor(gl, program, objData, textureUrl, presentObjData) {
+        this.gl = gl;
+        this.program=program;
+        this.object = new Object3D(gl, program, objData, textureUrl, 0.1);
         this.position = vec3.fromValues(0, 0, 0);
         this.rotation = vec3.fromValues(0, 0, 0);
         this.camera_forward = vec3.create();
-        this.spotlight_on = true;
+        this.is_aiming = true;
         this.camera_transitioning = false;
+        this.packages = [];
+
+        this.presentData = presentObjData;       
+    }
+
+    dropPackage() {
+        const velocity = vec3.fromValues(0, 5.0, 0);
+        const newPackage = new Package(
+            this.position,
+            velocity,
+            this.gl,
+            this.program,
+            this.presentData,
+            "../images/present.png"
+        );
+        this.packages.push(newPackage);
     }
 
     update(deltaTime, camera) {
-        const moveSpeed = 1.5;
+        const moveSpeed = 2.5;
         const rotateSpeed = 0.7;
 
         if (keys["w"]) vec3.scaleAndAdd(this.position, this.position, [camera.front[0], 0, camera.front[2]], moveSpeed * deltaTime);
@@ -226,7 +265,17 @@ class Zeppelin {
         if (keys["d"]) vec3.scaleAndAdd(this.position, this.position, [camera.right[0], 0, camera.right[2]], moveSpeed * deltaTime);
         if (keys["q"]) vec3.scaleAndAdd(this.position, this.position, [0, camera.up[1], 0], moveSpeed * deltaTime);
         if (keys["e"]) vec3.scaleAndAdd(this.position, this.position, [0, camera.up[1], 0], -moveSpeed * deltaTime);
+
+
+
         this.camera_forward = camera.front;
+   
+        if (this.is_aiming) {
+            this.camera_forward = [this.camera_forward[0], -1, this.camera_forward[2]]
+        } else {
+            this.camera_forward = [1, this.camera_forward[1], this.camera_forward[2]]
+        }
+
 
         if (keys["w"] || keys["s"] || keys["a"] || keys["d"] || keys["q"] || keys["e"]) {
             const forward = vec3.fromValues(camera.front[0], 0, camera.front[2]);
@@ -245,26 +294,22 @@ class Zeppelin {
         const target = vec3.create();
         const delta = vec3.create();
         vec3.copy(target, this.position);
-        if (this.spotlight_on) {
-            vec3.scaleAndAdd(target, target, camera.front, 4.5);
-            vec3.scaleAndAdd(target, target, [camera.front[0], -5.3, 0], 0.1);
-            camera.distance = 5.5;
-            camera.minPitch = -25;
-            camera.maxPitch = 20;
-        }
-        if (this.camera_transitioning) {
-            //vec3.lerp(delta, camera.target, target, 0.1 * moveSpeed);
-            const vecDiff = vec3.create();
-            vec3.subtract(vecDiff, target, delta);
-            if (vec3.length(vecDiff) < 0.15) {
-                this.camera_transitioning = false;
-            }
-        }
-        else {
-            vec3.copy(delta, target);
+
+        if (this.is_aiming) {
+            vec3.scaleAndAdd(target, target, camera.front, 3.5);
+            vec3.scaleAndAdd(target, target, [camera.front[0], camera.front[1], camera.front[2]], 0.1);
+            camera.distance = 3.5;
+            camera.minPitch = -90;
+            camera.maxPitch = 0;
         }
 
+        vec3.copy(delta, target);
         camera.setTarget(delta);
+
+        this.packages = this.packages.filter((pkg) => {
+            pkg.update(deltaTime);
+            return !pkg.isOutOfBounds();
+        });
     }
 
 
@@ -275,6 +320,8 @@ class Zeppelin {
         mat4.rotateZ(modelMatrix, modelMatrix, glMatrix.toRadian(this.rotation[2]));
 
         this.object.render(modelMatrix, viewMatrix, projectionMatrix);
+
+        this.packages.forEach((pkg) => pkg.render(viewMatrix, projectionMatrix));
     }
 }
 
@@ -351,11 +398,68 @@ async function main() {
         FragColor = vec4(resultColor * texColor.rgb, texColor.a);
     }`;
 
+    const fragmentShaderSourceCloud = `#version 300 es
+precision mediump float;
+
+in vec3 vNormal;
+in vec3 vFragPos;
+in vec2 vTexCoord;
+in vec3 viewDir;
+
+// Light properties
+struct Light {
+    vec3 position;
+    vec3 direction;
+    vec3 color;
+    float intensity;
+    vec3 attenuation;
+};
+
+uniform Light uDirLight;
+
+// Texture samplers
+uniform sampler2D uTexture;
+
+// Time uniform
+uniform float uTime;
+
+// Outputs
+out vec4 FragColor;
+
+void main() {
+    vec3 normal = normalize(vNormal);
+    vec4 texColor = texture(uTexture, vTexCoord);
+
+    vec3 resultColor = vec3(0.0);
+
+    float shininess = 10.0 + 10.0 * sin(uTime * 0.5);
+
+    // Ambient lighting
+    vec3 ambient = 0.1 * texColor.rgb;
+
+    // Diffuse lighting
+    vec3 lightDir = normalize(-uDirLight.direction);
+    float diff = max(dot(normal, lightDir), 0.0);
+    vec3 diffuse = diff * uDirLight.color * texColor.rgb;
+
+    // Specular lighting
+    vec3 reflectDir = reflect(-lightDir, normal);
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
+    vec3 specular = spec * uDirLight.color * 0.5;
+
+    // Combine results
+    resultColor = ambient + diffuse + specular;
+    FragColor = vec4(resultColor, texColor.a);
+}`;
+
     const program = createProgram(gl, vertexShaderSource, fragmentShaderSource);
+    const programCloud = createProgram(gl, vertexShaderSource, fragmentShaderSourceCloud);
     const objData = await fetch("../models/zeppelin.obj").then((res) => res.text());
     const textureUrl = "../images/zeppelin.png";
 
-    const zeppelin = new Zeppelin(gl, program, objData, textureUrl);
+    const presentObjData = await fetch("../models/present.obj").then((res) => res.text());
+
+    const zeppelin = new Zeppelin(gl, program, objData, textureUrl, presentObjData);
 
     function resizeCanvasToDisplaySize(canvas) {
         const displayWidth = canvas.clientWidth * window.devicePixelRatio;
@@ -377,7 +481,7 @@ async function main() {
 
     const cloudData = await fetch("../models/cloud.obj").then((res) => res.text());
     const cloudTexture = "../images/Cloud.png";
-    const cloudObject = new Object3D(gl, program, cloudData, cloudTexture, 0.01);
+    const cloudObject = new Object3D(gl, programCloud, cloudData, cloudTexture, 0.01);
 
     const landData = await fetch("../models/land.obj").then((res) => res.text());
     const landTexture = "../images/Cloud.png";
@@ -407,13 +511,20 @@ async function main() {
 
     gl.clearColor(0.1, 0.1, 0.1, 1.0);
     gl.enable(gl.DEPTH_TEST);
+
+    let startTime = Date.now();
+
     async function render(time) {
+        const currentTime = (Date.now() - startTime) / 1000; // Time in seconds
         resizeCanvasToDisplaySize(canvas);
         const deltaTime = (time - lastFrame) / 1000.0;
         lastFrame = time;
 
         // Clear the screen
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        const timeLocation = gl.getUniformLocation(programCloud, "uTime");
+        gl.uniform1f(timeLocation, currentTime);
 
         // Update objects
         zeppelin.update(deltaTime, camera);
@@ -461,9 +572,12 @@ async function main() {
 
     window.addEventListener("keydown", (e) => {
         keys[e.key.toLowerCase()] = true;
-        if (e.key.toLowerCase() == "l") {
-            zeppelin.spotlight_on = !zeppelin.spotlight_on;
+        if (e.key.toLowerCase() == "f") {
+            zeppelin.is_aiming = !zeppelin.is_aiming;
             zeppelin.camera_transitioning = true;
+        }
+        if (e.key.toLowerCase() == "r") {
+            zeppelin.dropPackage();
         }
     });
     window.addEventListener("keyup", (e) => (keys[e.key.toLowerCase()] = false));
